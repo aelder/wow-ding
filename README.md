@@ -8,7 +8,7 @@ Posts your character’s name and new level, for example **“Ding! Élara reach
 2. **WoW Ding** opens after installation. Check the detected game folder, paste a Discord channel webhook, and click **Install addon and connect**. To make a webhook, open the Discord text channel’s **Edit Channel → Integrations → Webhooks**, choose **New Webhook**, and click **Copy Webhook URL**. Creating one requires the channel’s Manage Webhooks permission.
 3. In WoW Forever, enter `/reload` and then `/ding ping`. Look for a labeled test containing your character’s name and current level in Discord. The setup window confirms when Discord accepts it. You can then close setup. Future level-ups post automatically, including after your next Windows sign-in.
 
-The MSI contains the addon, the watcher and Python. Each player supplies a webhook for their intended channel. Share the installer file privately with friends. The GitHub release link requires repository access.
+The MSI contains the addon, the watcher and Python. Each player supplies a webhook for their intended channel. Share the [installer download](https://github.com/aelder/wow-ding/releases/latest/download/WoW-Ding.msi) with friends.
 
 ### Settings and removal
 
