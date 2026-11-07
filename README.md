@@ -1,6 +1,15 @@
 # WoW Ding
 
-Posts your character’s name and new level, for example **“Ding! Élara reached level 42 in WoW.”** The addon briefly draws a marker and asks WoW Forever to save a screenshot. A separate Python watcher decodes the name and level locally. Discord receives a text message with mentions disabled.
+Posts your character’s name and new level, for example **“Ding! Élara reached level 42 in WoW.”** The addon briefly draws a marker and asks WoW Forever to save a screenshot. The desktop watcher decodes the name and level locally. Discord receives a text message with mentions disabled.
+
+## Get started on macOS
+
+1. Download [WoW-Ding-macOS.zip](https://github.com/aelder/wow-ding/releases/latest/download/WoW-Ding-macOS.zip), unzip it, and drag **WoW Ding.app** into Applications. The universal app requires macOS 13 or later and runs on Apple silicon and Intel. This release uses an ad-hoc signature. If macOS asks for developer verification on first launch, follow [Apple’s first-open instructions](https://support.apple.com/en-us/102445).
+2. Open **WoW Ding**, choose the World of Warcraft folder containing the `_forever_` Mac client, and paste your Discord channel webhook. Click **Install addon and connect**.
+3. In WoW Forever, enter `/reload` and then `/ding ping`. The setup window shows when Discord accepts the test. If WoW does not recognize the command, restart the game and enable **Ding** in AddOns.
+4. Close the window to keep watching. Use the bell in the menu bar to reopen settings or quit. Turn on **Open at login** in settings to resume after your next sign-in.
+
+The app stores the webhook in your login Keychain. Settings and delivery history are in `~/Library/Application Support/WoW Ding/`. Each game folder and channel pairing has its own history. **Disconnect** stops delivery and removes the login item, saved webhook, and unmodified addon files. To uninstall, disconnect, quit from the bell menu, and move the app to the Trash. You can delete the local history separately.
 
 ## Get started on Windows
 
@@ -33,6 +42,19 @@ On November 6, 2026, an in-game `/ding test` produced a 3840 × 2160 JPEG on thi
 
 ## Development
 
+### macOS
+
+Build the universal app with Xcode or its Command Line Tools installed. Python is only used by the test harness. From the project folder:
+
+```sh
+./macos/build.sh
+uv run --python 3.12 --with-requirements dev.txt ./macos/test.sh
+```
+
+The build produces `dist/WoW Ding.app` and `dist/WoW-Ding-macOS.zip`. The native tests render captures from the shipped Lua addon, compare Swift and Python marker decoding, install into a temporary game folder, check Discord requests with a simulated response, and restart the watcher with a pending delivery. For a live acceptance check, run the packaged app with a WoW Forever Mac client and use `/ding ping` in game.
+
+### Windows
+
 Use Python 3.12 for Windows x64 and the WiX 4.0.6 CLI (`dotnet tool install wix --version 4.0.6 --tool-path .tools`). From the project folder:
 
 ```powershell
@@ -46,4 +68,4 @@ The resulting `dist\WoW-Ding.msi` is the shareable installer. To test the CLI du
 
 Each tile has side length equal to 1/96 of the UI height. The first tile is one cell inward from the top-left corner. Each eight-bit row encodes one byte. After eleven rows the next block starts immediately to the right. The header carries magic bytes `D6 39`, a type byte, level (1–255), four bytes of server time and two random bytes. Types `20` (named level-up) and `22` (named test ding) append a length byte and up to 48 UTF-8 bytes of character name. Legacy types `10` (level only) and `11` (local diagnostic) omit the name. All types end with CRC-8 (polynomial `07`, initial zero). Values here are hexadecimal for magic, types and polynomial. Integers are big-endian, with the most significant bit on the left. The addon waits two rendered frames before capture. The decoder samples tile interiors, checks contrast, signature, type, level and CRC, and accepts JPEG, PNG and TGA. A per-capture ID lets repeated images of one marker resolve to the same queued notification.
 
-The test harness runs the shipped Lua in LuaJIT, draws the actual texture positions into images, and feeds them through the Python decoder. Tests also exercise capture queuing, failure and timeout cleanup, partial writes, restart recovery, diagnostic suppression and Discord error handling.
+The test harness runs the shipped Lua in LuaJIT (or Lua 5.1 on macOS), draws the actual texture positions into images, and feeds them through the Python decoder. Tests also exercise capture queuing, failure and timeout cleanup, partial writes, restart recovery, diagnostic suppression and Discord error handling.

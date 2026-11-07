@@ -4,6 +4,7 @@ from http.server import BaseHTTPRequestHandler, HTTPServer
 from io import StringIO
 import json
 import os
+import operator
 from pathlib import Path
 import sqlite3
 import tempfile
@@ -11,7 +12,10 @@ import threading
 import unittest
 from unittest.mock import patch
 
-from lupa.luajit21 import LuaRuntime
+try:
+    from lupa.luajit21 import LuaRuntime
+except ModuleNotFoundError:  # macOS wheels ship PUC Lua 5.1.
+    from lupa.lua51 import LuaRuntime
 from PIL import Image, ImageDraw
 
 import hook
@@ -25,6 +29,8 @@ ROOT = Path(__file__).resolve().parents[1]
 class Addon:
     def __init__(self):
         self.lua = LuaRuntime(unpack_returned_tuples=True)
+        if self.lua.globals().bit is None:
+            self.lua.globals().bit = self.lua.table(bxor=operator.xor)
         self.lua.execute((ROOT / "tests/wow.lua").read_text(encoding="utf-8"))
         self.lua.execute((ROOT / "Ding/Ding.lua").read_text())
         self.g = self.lua.globals()
