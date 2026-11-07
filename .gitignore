@@ -1,0 +1,10 @@
+.venv/
+__pycache__/
+.env*
+*.db*
+*.sqlite*
+*.png
+*.jpg
+*.jpeg
+*.tga
+Screenshots/

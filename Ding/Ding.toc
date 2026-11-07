@@ -1,0 +1,5 @@
+## Interface: 16001
+## Title: Ding
+## Notes: Capture a level marker for the local Discord watcher.
+## Version: 1.0.0
+Ding.lua
