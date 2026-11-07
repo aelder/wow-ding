@@ -116,28 +116,14 @@ def deliver(db, sender):
     print(f"Posted level {level}.", flush=True)
 
 
-def run():
-    parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("folder", type=Path, help="WoW Forever Screenshots directory")
-    parser.add_argument("--send", action="store_true", help="enable Discord delivery")
-    parser.add_argument("--state", type=Path, help="live SQLite state, one per folder and channel")
-    args = parser.parse_args()
-    if not args.folder.is_dir():
-        parser.error("Screenshots directory missing. Take a screenshot in WoW to create it.")
+def watch_folder(folder, endpoint=None, state=None, ready=None):
     db = None
     since = time.time_ns()
     try:
-        if args.send:
-            secret = os.environ.get("DISCORD_WEBHOOK")
-            if not secret:
-                if not sys.stdin.isatty():
-                    parser.error("Run --send in a terminal or supply DISCORD_WEBHOOK through the environment.")
-                secret = getpass.getpass("Discord webhook (hidden): ")
-            endpoint = webhook_path(secret)
-            root = Path(os.environ.get("LOCALAPPDATA") or Path.home() / ".local" / "state")
-            db = open_store(args.state or root / "WoWDing" / "events.db")
+        if endpoint:
+            db = open_store(state)
             since = db.execute("SELECT since_ns FROM meta WHERE id=1").fetchone()[0]
-        scan = Scanner(args.folder, since)
+        scan = Scanner(folder, since)
 
         def accept(event):
             if event.test:
@@ -150,6 +136,8 @@ def run():
                 enqueue(db, event)
 
         print("Watching for level-ups. " + ("Discord enabled." if db else "Dry run."), flush=True)
+        if ready:
+            ready()
         while True:
             scan.scan(accept)
             if db is not None:
@@ -158,6 +146,26 @@ def run():
     finally:
         if db is not None:
             db.close()
+
+
+def run():
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument("folder", type=Path, help="WoW Forever Screenshots directory")
+    parser.add_argument("--send", action="store_true", help="enable Discord delivery")
+    parser.add_argument("--state", type=Path, help="live SQLite state, one per folder and channel")
+    args = parser.parse_args()
+    if not args.folder.is_dir():
+        parser.error("Screenshots directory missing. Take a screenshot in WoW to create it.")
+    endpoint = None
+    if args.send:
+        secret = os.environ.get("DISCORD_WEBHOOK")
+        if not secret:
+            if not sys.stdin.isatty():
+                parser.error("Run --send in a terminal or supply DISCORD_WEBHOOK through the environment.")
+            secret = getpass.getpass("Discord webhook (hidden): ")
+        endpoint = webhook_path(secret)
+    root = Path(os.environ.get("LOCALAPPDATA") or Path.home() / ".local" / "state")
+    watch_folder(args.folder, endpoint, args.state or root / "WoWDing" / "events.db")
 
 
 if __name__ == "__main__":

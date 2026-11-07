@@ -39,12 +39,36 @@ Paste the URL at the hidden prompt and press Enter. A secret supplied as `DISCOR
 
 The first live run starts at the current time. Subsequent live runs pick up eligible files saved since that first start and recover queued events. The watcher waits for file size and modification time to settle, suppresses repeated event IDs, and persists Discord rate-limit and retry delays. A rejected webhook stops the live watcher with a status code. Correct the webhook and restart with the same state file. A lost response or a crash between Discord accepting a message and the local receipt being saved can produce a duplicate.
 
+## Start at Windows sign-in
+
+The optional Windows background app uses a per-user Startup shortcut named **WoW Ding**. It runs without a console and reads the webhook from **Credential Manager → Windows Credentials → Generic Credentials → WoW Ding/Discord webhook**. At startup it uses your existing delivery database. If the screenshot drive is unavailable, it checks again every 30 seconds.
+
+For an installed copy, open `%LOCALAPPDATA%\WoWDing\status.txt` to see the latest startup or error status and the process ID. To turn off future launches, press **Win+R**, enter `shell:startup`, and remove the **WoW Ding** shortcut. To stop the current session, end **WoWDing.exe** in Task Manager. To change the webhook, run the installed executable with `--setup`, then restart the watcher from its shortcut. To forget the saved URL, remove its entry in Credential Manager.
+
+To reproduce the installation on another Windows PC, run the following from the repository using the virtual environment above. Set `$shots` to the local Forever Screenshots folder first. The build includes its own Python runtime.
+
+```powershell
+.\.venv\Scripts\python.exe -m pip install -r win.txt
+$root = Join-Path $env:LOCALAPPDATA 'WoWDing'
+$build = Join-Path $env:TEMP 'WoWDing-build'
+.\.venv\Scripts\python.exe -m PyInstaller --onedir --windowed --name WoWDing --distpath "$root\bin" --specpath "$build" --workpath "$build\cache" windows.py
+$app = Join-Path $root 'bin\WoWDing\WoWDing.exe'
+Start-Process -FilePath $app -ArgumentList '--setup' -Wait
+$link = Join-Path ([Environment]::GetFolderPath('Startup')) 'WoW Ding.lnk'
+$shortcut = (New-Object -ComObject WScript.Shell).CreateShortcut($link)
+$shortcut.TargetPath = $app
+$shortcut.WorkingDirectory = Split-Path $app
+$shortcut.Arguments = '"' + $shots + '"'
+$shortcut.Save()
+Start-Process -FilePath $link
+```
+
 ## Privacy and storage
 
 - WoW saves a **full screenshot**, which can include chat, player names and the surrounding scene. Review or delete these files locally as you normally would. An unprocessed capture must still exist for the watcher to read it. Point the watcher at a trusted local directory. The checksum detects damage and accidental matches, and anyone able to write to that directory can construct a marker.
 - The addon uses the event payload and standard UI functions. It reads the player’s base character name with `UnitName("player")` and the manual test level with `UnitLevel("player")`. The webhook sends the character name and level as text. Realm, account, screenshots, filenames and timestamps stay local. If the client restricts access to the name, a real event falls back to a level-only post and a manual ping is skipped.
 - Live state is under `%LOCALAPPDATA%\WoWDing\events.db` on Windows. It holds the initial start time, event IDs (which include a capture timestamp), character names, levels, test flags, delivery status and retry state. It contains no screenshot or webhook token. Use `--state "path\to\events.db"` for a separate folder or destination. To reset the history, stop the watcher and remove its state file. The next live start establishes a fresh cutoff.
-- To disable, stop the watcher and disable **Ding** in WoW. Delete the webhook in Discord to revoke the URL. The project installs no system service or startup task.
+- To disable, stop the watcher, remove the optional Startup shortcut, and disable **Ding** in WoW. Delete the webhook in Discord to revoke the URL.
 
 ## Compatibility and verification
 
