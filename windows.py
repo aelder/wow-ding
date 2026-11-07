@@ -11,6 +11,7 @@ import time
 
 import pywintypes
 import win32cred
+import win32timezone  # CredRead loads this dynamically to convert LastWritten. Bundle it in the Windows app.
 
 from hook import Rejected, webhook_path
 from watch import watch_folder

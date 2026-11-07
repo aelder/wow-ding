@@ -1,5 +1,10 @@
 import importlib.util
+import os
+from pathlib import Path
+import subprocess
 import sys
+import tempfile
+import time
 import unittest
 import uuid
 from unittest.mock import patch
@@ -8,6 +13,29 @@ from unittest.mock import patch
 @unittest.skipUnless(sys.platform == "win32" and importlib.util.find_spec("win32cred"),
                      "requires Windows and win.txt")
 class WindowsStartup(unittest.TestCase):
+    @unittest.skipUnless(os.environ.get("WOWDING_EXE"), "set WOWDING_EXE to check the installed build with a saved webhook")
+    def test_installed_app_reads_saved_credential(self):
+        # The Windows vault remains user-scoped. Isolate the database and watch
+        # an empty folder so this startup check cannot send a Discord message.
+        with tempfile.TemporaryDirectory() as temp:
+            screenshots = Path(temp) / "Screenshots"
+            screenshots.mkdir()
+            status = Path(temp) / "WoWDing" / "status.txt"
+            proc = subprocess.Popen([os.environ["WOWDING_EXE"], str(screenshots)],
+                                    env={**os.environ, "LOCALAPPDATA": temp})
+            try:
+                for _ in range(100):
+                    if status.exists() and "Watching screenshots" in status.read_text(encoding="utf-8"):
+                        break
+                    self.assertIsNone(proc.poll(), "Packaged watcher exited during startup")
+                    time.sleep(0.1)
+                else:
+                    self.fail("Packaged watcher did not start watching with the saved credential")
+            finally:
+                if proc.poll() is None:
+                    proc.terminate()
+                proc.wait(timeout=10)
+
     def test_verified_destination_and_credential_round_trip(self):
         import windows
 
