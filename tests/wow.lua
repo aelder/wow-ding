@@ -5,6 +5,8 @@ SlashCmdList = {}
 frames, timers = {}, {}
 shots = 0
 function GetServerTime() return 1700000000 end
+function UnitName(unit) assert(unit == "player"); return "Élara" end
+function UnitLevel(unit) assert(unit == "player"); return 17 end
 function Screenshot() shots = shots + 1 end
 C_Timer = { After = function(delay, run) table.insert(timers, { delay = delay, run = run }) end }
 local region = {}

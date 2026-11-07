@@ -5,6 +5,7 @@ from io import StringIO
 import json
 import os
 from pathlib import Path
+import sqlite3
 import tempfile
 import threading
 import unittest
@@ -24,12 +25,14 @@ ROOT = Path(__file__).resolve().parents[1]
 class Addon:
     def __init__(self):
         self.lua = LuaRuntime(unpack_returned_tuples=True)
-        self.lua.execute((ROOT / "tests/wow.lua").read_text())
+        self.lua.execute((ROOT / "tests/wow.lua").read_text(encoding="utf-8"))
         self.lua.execute((ROOT / "Ding/Ding.lua").read_text())
         self.g = self.lua.globals()
 
-    def capture(self, level=42, test=False, height=1080):
-        if test:
+    def capture(self, level=42, test=False, height=1080, ping=False):
+        if ping:
+            self.g.SlashCmdList.WOWDING("ping")
+        elif test:
             self.g.SlashCmdList.WOWDING("test")
         else:
             self.g.fire("PLAYER_LEVEL_UP", level)
@@ -62,11 +65,35 @@ class Files(unittest.TestCase):
                 Addon().capture(level, height=height).save(self.file, format=fmt, quality=35)
                 event = marker.decode(self.file)
                 self.assertEqual((event.level, event.test), (level, False))
+                self.assertEqual(event.name, "Élara")
 
     def test_diagnostic_marker(self):
         Addon().capture(test=True).save(self.file)
         self.assertTrue(marker.decode(self.file).test)
         self.assertEqual(marker.decode(self.file).level, 42)
+
+    def test_name_validation_and_legacy_fallback(self):
+        for name in ("𠀀" * 12, "@everyone", ""):
+            with self.subTest(name=name):
+                addon = Addon()
+                addon.g.UnitName = lambda _: name
+                addon.capture(25).save(self.file)
+                event = marker.decode(self.file)
+                if name == "@everyone":
+                    self.assertIsNone(event)
+                else:
+                    self.assertEqual((event.level, event.name), (25, name or None))
+
+    def test_old_queue_upgrade(self):
+        path = self.folder / "old.db"
+        with contextlib.closing(sqlite3.connect(path)) as old:
+            old.execute("CREATE TABLE events(id TEXT PRIMARY KEY, level INTEGER NOT NULL, sent INTEGER DEFAULT 0)")
+            old.executemany("INSERT INTO events VALUES (?, ?, ?)", [("old", 24, 1), ("queued", 25, 0)])
+            old.commit()
+        with contextlib.closing(watch.open_store(path)) as db:
+            sent = []
+            watch.deliver(db, lambda *event: sent.append(event))
+            self.assertEqual(sent, [(25, None, False)])
 
     def test_corrupt_ordinary_and_unknown(self):
         image = Addon().capture(height=960)
@@ -136,9 +163,9 @@ class Files(unittest.TestCase):
             for _ in range(2):
                 scan.scan(lambda event: watch.enqueue(db, event))
             sent = []
-            watch.deliver(db, sent.append)
-            watch.deliver(db, sent.append)
-            self.assertEqual(sent, [24])
+            watch.deliver(db, lambda *event: sent.append(event))
+            watch.deliver(db, lambda *event: sent.append(event))
+            self.assertEqual(sent, [(24, "Élara", False)])
 
     def test_rate_limit_queue_survives_restart(self):
         state = self.folder / "state.db"
@@ -146,16 +173,16 @@ class Files(unittest.TestCase):
             for i in range(2):
                 watch.enqueue(db, marker.Event(str(i), 40 + i, False))
             with patch("watch.time.time", return_value=100):
-                watch.deliver(db, lambda _: self.rate_limit())
+                watch.deliver(db, lambda *_: self.rate_limit())
         with contextlib.closing(watch.open_store(state)) as db:
             sent = []
             with patch("watch.time.time", return_value=119):
-                watch.deliver(db, sent.append)
+                watch.deliver(db, lambda *event: sent.append(event))
             self.assertFalse(sent)
             with patch("watch.time.time", return_value=120):
-                watch.deliver(db, sent.append)
-                watch.deliver(db, sent.append)
-            self.assertEqual(sent, [40, 41])
+                watch.deliver(db, lambda *event: sent.append(event))
+                watch.deliver(db, lambda *event: sent.append(event))
+            self.assertEqual(sent, [(40, None, False), (41, None, False)])
 
     def test_watch_modes(self):
         for live in (False, True):
@@ -173,6 +200,7 @@ class Files(unittest.TestCase):
                     if ticks == 0:
                         Addon().capture(19).save(folder / "real.jpg")
                         Addon().capture(test=True).save(folder / "test.jpg")
+                        Addon().capture(ping=True).save(folder / "ping.jpg")
                     ticks += 1
                     if ticks == 4:
                         raise KeyboardInterrupt
@@ -187,10 +215,13 @@ class Files(unittest.TestCase):
                 self.assertNotIn("test_only", output.getvalue())
                 self.assertEqual(state.exists(), live)
                 if live:
-                    send.assert_called_once_with("/api/webhooks/1/test_only?wait=true", 19)
+                    path = "/api/webhooks/1/test_only?wait=true"
+                    self.assertEqual(send.call_count, 2)
+                    send.assert_any_call(path, 19, "Élara", False)
+                    send.assert_any_call(path, 17, "Élara", True)
                 else:
                     send.assert_not_called()
-                    self.assertIn("Dry run: level 19", output.getvalue())
+                    self.assertIn("Dry run: Élara, level 19", output.getvalue())
 
     @staticmethod
     def rate_limit():
@@ -236,6 +267,11 @@ class Webhook(unittest.TestCase):
                     self.assertEqual(received[0], (path, "application/json",
                                      {"content": "Ding! Reached level 42 in WoW.",
                                       "allowed_mentions": {"parse": []}}))
+                    hook.post(path, 17, "Élara", True)
+                    self.assertEqual(received[-1][2], {"content": "Test ding! Élara is level 17 in WoW.",
+                                                       "allowed_mentions": {"parse": []}})
+                    hook.post(path, 18, "Élara")
+                    self.assertEqual(received[-1][2]["content"], "Ding! Élara reached level 18 in WoW.")
                     status = 429
                     with self.assertRaises(hook.Retry) as ctx:
                         hook.post(path, 42)

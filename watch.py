@@ -73,10 +73,14 @@ def open_store(path):
     path.parent.mkdir(mode=0o700, parents=True, exist_ok=True)
     db = sqlite3.connect(path, timeout=30)
     with db:
+        db.execute("BEGIN IMMEDIATE")
         db.execute("CREATE TABLE IF NOT EXISTS meta (id INTEGER PRIMARY KEY, since_ns INTEGER NOT NULL)")
         db.execute("INSERT OR IGNORE INTO meta VALUES (1, ?)", (time.time_ns(),))
         db.execute("""CREATE TABLE IF NOT EXISTS events (
                    id TEXT PRIMARY KEY, level INTEGER NOT NULL, sent INTEGER DEFAULT 0)""")
+        if "name" not in {column[1] for column in db.execute("PRAGMA table_info(events)")}:
+            db.execute("ALTER TABLE events ADD COLUMN name TEXT")
+            db.execute("ALTER TABLE events ADD COLUMN ping INTEGER NOT NULL DEFAULT 0")
         db.execute("""CREATE TABLE IF NOT EXISTS delivery (
                    id INTEGER PRIMARY KEY, due REAL DEFAULT 0, attempts INTEGER DEFAULT 0)""")
         db.execute("INSERT OR IGNORE INTO delivery (id) VALUES (1)")
@@ -85,7 +89,8 @@ def open_store(path):
 
 def enqueue(db, event):
     with db:
-        db.execute("INSERT OR IGNORE INTO events (id, level) VALUES (?, ?)", (event.key, event.level))
+        db.execute("INSERT OR IGNORE INTO events (id, level, name, ping) VALUES (?, ?, ?, ?)",
+                   (event.key, event.level, event.name, event.ping))
 
 
 def deliver(db, sender):
@@ -95,12 +100,12 @@ def deliver(db, sender):
         due, attempts = db.execute("SELECT due, attempts FROM delivery WHERE id=1").fetchone()
         if due > time.time():
             return
-        event = db.execute("SELECT id, level FROM events WHERE sent=0 ORDER BY rowid LIMIT 1").fetchone()
+        event = db.execute("SELECT id, level, name, ping FROM events WHERE sent=0 ORDER BY rowid LIMIT 1").fetchone()
         if event is None:
             return
-        key, level = event
+        key, level, name, ping = event
         try:
-            sender(level)
+            sender(level, name, bool(ping))
         except Retry as error:
             delay = max(error.delay, min(300, 2 ** min(attempts + 1, 9)))
             db.execute("UPDATE delivery SET attempts=attempts+1, due=? WHERE id=1", (time.time() + delay,))
@@ -138,7 +143,9 @@ def run():
             if event.test:
                 print(f"Test marker decoded: level {event.level}.", flush=True)
             elif db is None:
-                print(f"Dry run: level {event.level}.", flush=True)
+                label = "Test ding" if event.ping else "Dry run"
+                who = f"{event.name}, " if event.name else ""
+                print(f"{label}: {who}level {event.level}.", flush=True)
             else:
                 enqueue(db, event)
 
@@ -146,7 +153,7 @@ def run():
         while True:
             scan.scan(accept)
             if db is not None:
-                deliver(db, lambda level: post(endpoint, level))
+                deliver(db, lambda level, name, ping: post(endpoint, level, name, ping))
             time.sleep(1)
     finally:
         if db is not None:

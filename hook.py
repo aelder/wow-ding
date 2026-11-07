@@ -29,8 +29,14 @@ def delay_seconds(value) -> float:
         return 0
 
 
-def post(path: str, level: int):
-    body = json.dumps({"content": f"Ding! Reached level {level} in WoW.",
+def post(path: str, level: int, name: str | None = None, ping: bool = False):
+    if ping:
+        content = f"Test ding! {name} is level {level} in WoW."
+    elif name:
+        content = f"Ding! {name} reached level {level} in WoW."
+    else:
+        content = f"Ding! Reached level {level} in WoW."
+    body = json.dumps({"content": content,
                        "allowed_mentions": {"parse": []}})
     conn = http.client.HTTPSConnection("discord.com", timeout=10)
     try:

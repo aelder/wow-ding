@@ -3,11 +3,8 @@ local marker = CreateFrame("Frame", nil, UIParent)
 marker:SetFrameStrata("TOOLTIP")
 marker:Hide()
 local tiles = {}
-for i = 1, 88 do
-    tiles[i] = marker:CreateTexture(nil, "OVERLAY")
-end
 
-local function packet(level, kind)
+local function packet(level, kind, name)
     local stamp = GetServerTime()
     local nonce = math.random(0, 65535)
     local bytes = { 0xD6, 0x39, kind, level }
@@ -16,6 +13,10 @@ local function packet(level, kind)
     end
     table.insert(bytes, math.floor(nonce / 256))
     table.insert(bytes, nonce % 256)
+    if name then
+        table.insert(bytes, #name)
+        for i = 1, #name do table.insert(bytes, name:byte(i)) end
+    end
     local crc = 0
     for _, byte in ipairs(bytes) do
         crc = bit.bxor(crc, byte)
@@ -31,17 +32,22 @@ end
 
 local function draw(bytes)
     local cell = UIParent:GetHeight() / 96
-    marker:SetSize(8 * cell, #bytes * cell)
+    marker:SetSize(math.ceil(#bytes / 11) * 8 * cell, 11 * cell)
     marker:SetPoint("TOPLEFT", UIParent, "TOPLEFT", cell, -cell)
     for row, byte in ipairs(bytes) do
         for col = 0, 7 do
-            local tile = tiles[(row - 1) * 8 + col + 1]
+            local index = (row - 1) * 8 + col + 1
+            local tile = tiles[index] or marker:CreateTexture(nil, "OVERLAY")
+            tiles[index] = tile
             local value = math.floor(byte / 2 ^ (7 - col)) % 2
-            tile:SetPoint("TOPLEFT", marker, "TOPLEFT", col * cell, -(row - 1) * cell)
+            local column = math.floor((row - 1) / 11) * 8 + col
+            tile:SetPoint("TOPLEFT", marker, "TOPLEFT", column * cell, -((row - 1) % 11) * cell)
             tile:SetSize(cell, cell)
             tile:SetColorTexture(value, value, value, 1)
+            tile:Show()
         end
     end
+    for i = #bytes * 8 + 1, #tiles do tiles[i]:Hide() end
     marker:Show()
 end
 
@@ -88,11 +94,24 @@ startNext = function()
     end)
 end
 
-local function enqueue(level, kind)
+local function enqueue(level, kind, name)
     if issecretvalue and issecretvalue(level) then return end
     if type(level) ~= "number" or level < 1 or level > 255 or level ~= math.floor(level) then return end
-    table.insert(queue, packet(level, kind))
+    table.insert(queue, packet(level, kind, name))
     startNext()
+end
+
+local function capturePlayer(level, kind)
+    local name = UnitName("player")
+    if (issecretvalue and issecretvalue(name)) or type(name) ~= "string" or #name < 1 or #name > 48 then
+        if kind == 0x20 then
+            enqueue(level, 0x10)
+        else
+            print("Ding: character name unavailable. Try again outside restricted content.")
+        end
+        return
+    end
+    enqueue(level, kind, name)
 end
 
 events:RegisterEvent("PLAYER_LEVEL_UP")
@@ -100,7 +119,7 @@ events:RegisterEvent("SCREENSHOT_SUCCEEDED")
 events:RegisterEvent("SCREENSHOT_FAILED")
 events:SetScript("OnEvent", function(_, event, level)
     if event == "PLAYER_LEVEL_UP" then
-        enqueue(level, 0x10)
+        capturePlayer(level, 0x20)
     elseif requested then
         if event == "SCREENSHOT_FAILED" then
             finish("WoW could not save the screenshot.")
@@ -112,10 +131,13 @@ end)
 
 SLASH_WOWDING1 = "/ding"
 SlashCmdList.WOWDING = function(input)
-    if input:lower():match("^%s*test%s*$") then
+    local command = input:lower():match("^%s*(.-)%s*$")
+    if command == "test" then
         enqueue(42, 0x11)
         print("Ding: requested a local test capture for level 42.")
+    elseif command == "ping" then
+        capturePlayer(UnitLevel("player"), 0x22)
     else
-        print("Ding: /ding test takes a diagnostic screenshot. Tests never post.")
+        print("Ding: /ding ping sends a labeled character test in live mode. /ding test checks capture locally.")
     end
 end
