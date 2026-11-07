@@ -116,7 +116,7 @@ def deliver(db, sender):
     print(f"Posted level {level}.", flush=True)
 
 
-def watch_folder(folder, endpoint=None, state=None, ready=None):
+def watch_folder(folder, endpoint=None, state=None, ready=None, running=None):
     db = None
     since = time.time_ns()
     try:
@@ -138,7 +138,7 @@ def watch_folder(folder, endpoint=None, state=None, ready=None):
         print("Watching for level-ups. " + ("Discord enabled." if db else "Dry run."), flush=True)
         if ready:
             ready()
-        while True:
+        while running is None or running():
             scan.scan(accept)
             if db is not None:
                 deliver(db, lambda level, name, ping: post(endpoint, level, name, ping))

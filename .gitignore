@@ -8,3 +8,5 @@ __pycache__/
 *.jpeg
 *.tga
 Screenshots/
+dist/
+.tools/

@@ -1,4 +1,5 @@
 import importlib.util
+import json
 import os
 from pathlib import Path
 import subprocess
@@ -21,7 +22,10 @@ class WindowsStartup(unittest.TestCase):
             screenshots = Path(temp) / "Screenshots"
             screenshots.mkdir()
             status = Path(temp) / "WoWDing" / "status.txt"
-            proc = subprocess.Popen([os.environ["WOWDING_EXE"], str(screenshots)],
+            status.parent.mkdir()
+            config = status.with_name("settings.json")
+            config.write_text(json.dumps({"game": temp, "state": "test.db", "revision": "test"}))
+            proc = subprocess.Popen([os.environ["WOWDING_EXE"], "--watch"],
                                     env={**os.environ, "LOCALAPPDATA": temp})
             try:
                 for _ in range(100):
@@ -32,9 +36,53 @@ class WindowsStartup(unittest.TestCase):
                 else:
                     self.fail("Packaged watcher did not start watching with the saved credential")
             finally:
-                if proc.poll() is None:
-                    proc.terminate()
+                config.unlink(missing_ok=True)
                 proc.wait(timeout=10)
+
+    def test_setup_upgrade_and_removal(self):
+        import windows
+        import addon
+
+        secret = "https://discord.com/api/webhooks/1/test_only"
+        with tempfile.TemporaryDirectory() as work:
+            game = Path(work) / "_forever_"
+            game.mkdir()
+            (game / "Wow.exe").touch()
+            root = Path(work) / "user"
+            with (patch.object(windows, "ROOT", root), patch.object(windows, "verify_secret", return_value="123") as verify,
+                  patch.object(windows, "store_secret"), patch.object(windows, "load_secret", return_value=secret),
+                  patch.object(windows.win32cred, "CredDelete") as forget):
+                first = windows.connect(work, secret)
+                addon_folder = game / "Interface" / "AddOns" / "Ding"
+                self.assertEqual((addon_folder / "Ding.lua").read_bytes(), (addon.SOURCE / "Ding.lua").read_bytes())
+                self.assertTrue((game / "Screenshots").is_dir())
+                self.assertNotIn("test_only", (root / "settings.json").read_text())
+                second = windows.connect(str(game), "")
+                self.assertEqual(first["state"], second["state"])
+                verify.return_value = "456"
+                self.assertNotEqual(first["state"], windows.connect(work, secret)["state"])
+                (addon_folder / "Ding.lua").write_text("-- user edit")
+                with self.assertRaisesRegex(ValueError, "different addon"):
+                    windows.connect(work, secret)
+                windows.cleanup()
+                self.assertEqual((addon_folder / "Ding.lua").read_text(), "-- user edit")
+                self.assertFalse((addon_folder / "Ding.toc").exists())
+                self.assertTrue((game / "Screenshots").is_dir())
+                self.assertFalse((root / "settings.json").exists())
+                forget.assert_called_once()
+
+    def test_wrong_game_and_invalid_webhook(self):
+        import windows
+
+        with tempfile.TemporaryDirectory() as work:
+            game = Path(work) / "_forever_"
+            with self.assertRaisesRegex(ValueError, "_forever_"):
+                windows.connect(work, "invalid")
+            game.mkdir()
+            (game / "Wow.exe").touch()
+            with self.assertRaises(ValueError):
+                windows.connect(work, "invalid")
+            self.assertFalse((game / "Interface").exists())
 
     def test_verified_destination_and_credential_round_trip(self):
         import windows

@@ -2,72 +2,27 @@
 
 Posts your character’s name and new level, for example **“Ding! Élara reached level 42 in WoW.”** The addon briefly draws a marker and asks WoW Forever to save a screenshot. A separate Python watcher decodes the name and level locally. Discord receives a text message with mentions disabled.
 
-## Install on Windows
+## Get started on Windows
 
-1. Clone or download this repository. Open PowerShell in the project folder.
-2. In Battle.net, select **World of Warcraft: Forever → Show in Explorer**. Find the folder named `_forever_`. Copy this repository's entire `Ding` folder into its `Interface\AddOns` folder. The result must include `_forever_\Interface\AddOns\Ding\Ding.toc`.
-3. Enable **Ding** in the AddOns list. If WoW was open, enter `/reload`. Restart the client if Ding does not appear. Take an ordinary in-game screenshot once if the `Screenshots` folder is missing.
-4. Use Python 3.12 with a virtual environment. These commands use the Windows Python launcher. If Python 3.12 is already available as `python`, use `python -m venv .venv` for the first command.
+1. Download **WoW-Ding.msi** from the [latest release](https://github.com/aelder/wow-ding/releases/latest), or use the installer shared with you. Double-click it on a Windows 10 or 11 x64 PC with WoW Forever installed.
+2. **WoW Ding** opens after installation. Check the detected game folder, paste a Discord channel webhook, and click **Install addon and connect**. To make a webhook, open the Discord text channel’s **Edit Channel → Integrations → Webhooks**, choose **New Webhook**, and click **Copy Webhook URL**. Creating one requires the channel’s Manage Webhooks permission.
+3. In WoW Forever, enter `/reload` and then `/ding ping`. Look for a labeled test containing your character’s name and current level in Discord. The setup window confirms when Discord accepts it. You can then close setup. Future level-ups post automatically, including after your next Windows sign-in.
 
-```powershell
-py -3.12 -m venv .venv
-.\.venv\Scripts\python.exe -m pip install -r requirements.txt
-```
+The MSI contains the addon, the watcher and Python. Each player supplies a webhook for their intended channel. Share the installer file privately with friends. The GitHub release link requires repository access.
 
-## Check the capture locally
+### Settings and removal
 
-Set the folder to your own Forever installation and start the watcher. Keep its terminal open.
+Open **WoW Ding** from Start to change the game folder or webhook. Leave the webhook blank to reuse the saved one. The URL lives in Windows Credential Manager under **WoW Ding/Discord webhook**. Windows may show an unknown-publisher notice for the unsigned installer. Obtain the file from someone you trust.
 
-```powershell
-$shots = 'C:\Program Files (x86)\World of Warcraft\_forever_\Screenshots'
-.\.venv\Scripts\python.exe watch.py "$shots"
-```
+If the game folder is empty or incorrect, click **Browse** and choose `World of Warcraft` or its `_forever_` folder. If the game is open during setup and the slash command is unknown, restart WoW and enable **Ding** in AddOns. If a test does not appear, check that the UI is visible and WoW can write to `_forever_\Screenshots`. The local-only `/ding test` command is available for capture diagnostics.
 
-In WoW, show the UI and enter `/ding test`. Within a few seconds the terminal should show **Test marker decoded: level 42.** For a real level-up, dry run prints the name and level. The fixed level-42 diagnostic stays local in both modes. Press **Ctrl+C** to stop a foreground watcher.
-
-If the slash command works but nothing decodes, confirm that a new image appears in the watched directory and that the black-and-white tiles are visible at its upper left. Use original screenshots from WoW with the UI visible. Cropping, UI-hiding tools, third-party overlays or extremely low screenshot resolution can obscure the marker. WoW reports capture failures in chat.
-
-## Enable Discord
-
-In the destination Discord text channel, open **Edit Channel → Integrations → Webhooks**, create or select an incoming webhook, and copy its URL. You need permission to manage webhooks in that channel. Stop the foreground dry run, then run:
-
-```powershell
-.\.venv\Scripts\python.exe watch.py "$shots" --send
-```
-
-Paste the URL at the hidden prompt and press Enter. A secret supplied as `DISCORD_WEBHOOK` in the process environment also works. Keep the URL out of source code, command arguments and chat. The watcher accepts the standard HTTPS channel webhook URL on `discord.com`. In game, enter `/ding ping` for a labeled test using the current character’s name and level, for example **“Test ding! Élara is level 17 in WoW.”** Real level-ups post automatically. After upgrading, restart the watcher and use `/reload` in WoW. Discord clients apply each member’s channel notification settings. [Discord webhook reference](https://docs.discord.com/developers/resources/webhook#execute-webhook)
-
-The first live run starts at the current time. Subsequent live runs pick up eligible files saved since that first start and recover queued events. The watcher waits for file size and modification time to settle, suppresses repeated event IDs, and persists Discord rate-limit and retry delays. A rejected webhook stops the live watcher with a status code. Correct the webhook and restart with the same state file. A lost response or a crash between Discord accepting a message and the local receipt being saved can produce a duplicate.
-
-## Start at Windows sign-in
-
-The optional Windows background app uses a per-user Startup shortcut named **WoW Ding**. It runs without a console and reads the webhook from **Credential Manager → Windows Credentials → Generic Credentials → WoW Ding/Discord webhook**. At startup it uses your existing delivery database. If the screenshot drive is unavailable, it checks again every 30 seconds.
-
-For an installed copy, open `%LOCALAPPDATA%\WoWDing\status.txt` to see the latest startup or error status and the process ID. To turn off future launches, press **Win+R**, enter `shell:startup`, and remove the **WoW Ding** shortcut. To stop the current session, end **WoWDing.exe** in Task Manager. To change the webhook, run the installed executable with `--setup`, then restart the watcher from its shortcut. To forget the saved URL, remove its entry in Credential Manager.
-
-To reproduce the installation on another Windows PC, run the following from the repository using the virtual environment above. Set `$shots` to the local Forever Screenshots folder first. The build includes its own Python runtime.
-
-```powershell
-.\.venv\Scripts\python.exe -m pip install -r win.txt
-$root = Join-Path $env:LOCALAPPDATA 'WoWDing'
-$build = Join-Path $env:TEMP 'WoWDing-build'
-.\.venv\Scripts\python.exe -m PyInstaller --onedir --windowed --name WoWDing --distpath "$root\bin" --specpath "$build" --workpath "$build\cache" windows.py
-$app = Join-Path $root 'bin\WoWDing\WoWDing.exe'
-Start-Process -FilePath $app -ArgumentList '--setup' -Wait
-$link = Join-Path ([Environment]::GetFolderPath('Startup')) 'WoW Ding.lnk'
-$shortcut = (New-Object -ComObject WScript.Shell).CreateShortcut($link)
-$shortcut.TargetPath = $app
-$shortcut.WorkingDirectory = Split-Path $app
-$shortcut.Arguments = '"' + $shots + '"'
-$shortcut.Save()
-Start-Process -FilePath $link
-```
+Use **Settings → Apps → Installed apps → WoW Ding → Uninstall** to remove the installer-managed app, startup shortcut, saved webhook and unmodified addon files. Local delivery history and screenshots remain on your PC. Discord lets you revoke the webhook by deleting it in the channel settings.
 
 ## Privacy and storage
 
 - WoW saves a **full screenshot**, which can include chat, player names and the surrounding scene. Review or delete these files locally as you normally would. An unprocessed capture must still exist for the watcher to read it. Point the watcher at a trusted local directory. The checksum detects damage and accidental matches, and anyone able to write to that directory can construct a marker.
 - The addon uses the event payload and standard UI functions. It reads the player’s base character name with `UnitName("player")` and the manual test level with `UnitLevel("player")`. The webhook sends the character name and level as text. Realm, account, screenshots, filenames and timestamps stay local. If the client restricts access to the name, a real event falls back to a level-only post and a manual ping is skipped.
-- Live state is under `%LOCALAPPDATA%\WoWDing\events.db` on Windows. It holds the initial start time, event IDs (which include a capture timestamp), character names, levels, test flags, delivery status and retry state. It contains no screenshot or webhook token. Use `--state "path\to\events.db"` for a separate folder or destination. To reset the history, stop the watcher and remove its state file. The next live start establishes a fresh cutoff.
+- Live state is under `%LOCALAPPDATA%\WoWDing` on Windows. Setup selects a delivery database for the configured folder and channel. It holds the initial start time, event IDs (which include a capture timestamp), character names, levels, test flags, delivery status and retry state. It contains no screenshot or webhook token. Changing the destination starts a fresh history. To reset the history, stop the watcher and remove its state file. The next live start establishes a fresh cutoff.
 - To disable, stop the watcher, remove the optional Startup shortcut, and disable **Ding** in WoW. Delete the webhook in Discord to revoke the URL.
 
 ## Compatibility and verification
@@ -78,10 +33,16 @@ On November 6, 2026, an in-game `/ding test` produced a 3840 × 2160 JPEG on thi
 
 ## Development
 
+Use Python 3.12 for Windows x64 and the WiX 4.0.6 CLI (`dotnet tool install wix --version 4.0.6 --tool-path .tools`). From the project folder:
+
 ```powershell
-.\.venv\Scripts\python.exe -m pip install -r dev.txt
+py -3.12 -m venv .venv
+.\.venv\Scripts\python.exe -m pip install -r dev.txt -r win.txt
 .\.venv\Scripts\python.exe -m unittest discover -s tests -v
+.\build.ps1 -Wix .\.tools\wix.exe
 ```
+
+The resulting `dist\WoW-Ding.msi` is the shareable installer. To test the CLI during development, run `.\.venv\Scripts\python.exe watch.py "path-to-Screenshots"` for a local dry run. Add `--send` for live delivery with a hidden webhook prompt. Each packaged release should also exercise an install, upgrade and uninstall, plus the packaged-app test using `WOWDING_EXE` on a Windows account with a saved webhook.
 
 Each tile has side length equal to 1/96 of the UI height. The first tile is one cell inward from the top-left corner. Each eight-bit row encodes one byte. After eleven rows the next block starts immediately to the right. The header carries magic bytes `D6 39`, a type byte, level (1–255), four bytes of server time and two random bytes. Types `20` (named level-up) and `22` (named test ding) append a length byte and up to 48 UTF-8 bytes of character name. Legacy types `10` (level only) and `11` (local diagnostic) omit the name. All types end with CRC-8 (polynomial `07`, initial zero). Values here are hexadecimal for magic, types and polynomial. Integers are big-endian, with the most significant bit on the left. The addon waits two rendered frames before capture. The decoder samples tile interiors, checks contrast, signature, type, level and CRC, and accepts JPEG, PNG and TGA. A per-capture ID lets repeated images of one marker resolve to the same queued notification.
 
