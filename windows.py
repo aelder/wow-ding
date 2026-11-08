@@ -15,7 +15,7 @@ import pywintypes
 import win32cred
 import win32timezone  # CredRead loads this dynamically to convert LastWritten. Bundle it in the Windows app.
 
-from hook import Rejected, webhook_path
+from hook import Rejected, verify_secret, webhook_path
 from watch import watch_folder
 import addon
 
@@ -27,24 +27,6 @@ ROOT = Path(os.environ["LOCALAPPDATA"]) / "WoWDing"
 def load_secret():
     credential = win32cred.CredRead(TARGET, win32cred.CRED_TYPE_GENERIC)
     return credential["CredentialBlob"].decode("utf-16-le")
-
-
-def verify_secret(secret, channel=None):
-    path = webhook_path(secret).split("?")[0]
-    conn = http.client.HTTPSConnection("discord.com", timeout=10)
-    try:
-        conn.request("GET", path, headers={"User-Agent": "WoW-Ding/1.1"})
-        response = conn.getresponse()
-        if response.status != 200:
-            raise ValueError(f"Discord returned HTTP {response.status}. Check the webhook and try again.")
-        metadata = json.loads(response.read(64_000))
-        if channel and metadata.get("channel_id") != channel:
-            raise ValueError("Please use the webhook for your existing WoW Ding channel.")
-        if not isinstance(metadata.get("channel_id"), str) or not metadata["channel_id"].isascii() or not metadata["channel_id"].isdigit():
-            raise ValueError("Choose a webhook for a Discord text channel.")
-        return metadata["channel_id"]
-    finally:
-        conn.close()
 
 
 def store_secret(secret):

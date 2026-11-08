@@ -3,7 +3,6 @@ import hashlib
 import os
 from pathlib import Path
 import tempfile
-import winreg
 
 SOURCE = Path(__file__).resolve().parent / "Ding"
 FILES = ("Ding.toc", "Ding.lua")
@@ -18,6 +17,8 @@ def forever(path):
 
 
 def detect():
+    import winreg
+
     candidates = []
     for hive in (winreg.HKEY_CURRENT_USER, winreg.HKEY_LOCAL_MACHINE):
         for view in (winreg.KEY_WOW64_32KEY, winreg.KEY_WOW64_64KEY):

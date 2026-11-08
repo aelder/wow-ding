@@ -2,6 +2,18 @@
 
 Posts your character’s name and new level, for example **“Ding! Élara reached level 42 in WoW.”** The addon briefly draws a marker and asks WoW Forever to save a screenshot. The desktop watcher decodes the name and level locally. Discord receives a text message with mentions disabled.
 
+## Get started on Linux
+
+**Debian or Ubuntu.** Download [WoW-Ding-Linux.deb](https://github.com/aelder/wow-ding/releases/latest/download/WoW-Ding-Linux.deb). From the download folder, run `sudo apt install ./WoW-Ding-Linux.deb`, then open **WoW Ding** from the applications menu. The package requires Python 3.10 or later and uses your distribution’s Tk and Pillow packages.
+
+**Other x86-64 desktops.** Download [WoW-Ding-Linux-x86_64.tar.gz](https://github.com/aelder/wow-ding/releases/latest/download/WoW-Ding-Linux-x86_64.tar.gz), extract it somewhere you plan to keep it, and run `./wow-ding/wow-ding` from the extraction directory. Keep the executable together with its `_internal` folder. This build bundles Python, Tk and Pillow and targets glibc 2.36 or later. Both builds need an X11 or XWayland display, `secret-tool` and an unlocked desktop keyring that provides Secret Service.
+
+1. Select the **World of Warcraft** folder inside your Wine or Proton prefix, or choose its **_forever_** directory containing **Wow.exe**. For a Steam installation, the prefix is usually under the Steam library’s `steamapps/compatdata/<id>/pfx/drive_c`. Use the Linux filesystem path shown by the folder picker.
+2. Paste your Discord channel webhook and click **Install addon and connect**. Leave **Start the watcher at desktop login** checked to resume after sign-in. You can close setup while the watcher runs.
+3. In WoW Forever, enter `/reload` and then `/ding ping`. The setup window shows when Discord accepts the test. If WoW cannot find the addon, restart the client and enable **Ding** in AddOns.
+
+Reopen **WoW Ding** to change settings. **Disconnect** stops watching and removes the saved webhook, login entry and unmodified addon files. Then use `sudo apt remove wow-ding` or delete the extracted portable folder. Settings default to `~/.config/wow-ding/` and delivery history to `~/.local/state/wow-ding/`. The app honors `XDG_CONFIG_HOME` and `XDG_STATE_HOME`. For a local capture check, run `wow-ding --dry-run /path/to/Screenshots`.
+
 ## Get started on macOS
 
 1. Download [WoW-Ding-macOS.zip](https://github.com/aelder/wow-ding/releases/latest/download/WoW-Ding-macOS.zip), unzip it, and drag **WoW Ding.app** into Applications. The universal app requires macOS 13 or later and runs on Apple silicon and Intel. This release uses an ad-hoc signature. If macOS asks for developer verification on first launch, follow [Apple’s first-open instructions](https://support.apple.com/en-us/102445).
@@ -41,6 +53,17 @@ Target: **WoW Forever 1.60.1, build 70840, interface 16001**. The installed Wind
 On November 6, 2026, an in-game `/ding test` produced a 3840 × 2160 JPEG on this build. The running watcher reported level 42. The automated tests exercise the real addon event handler with a simulated level-up and check HTTP requests against a local server. A live Discord connection test also returned a confirmed message. A natural level-up remains a separate live acceptance check. Other WoW editions are outside the verified target. This independent project makes no claim of Blizzard approval. [Blizzard UI Add-On Development Policy](https://us.forums.blizzard.com/en/wow/t/ui-add-on-development-policy/24534)
 
 ## Development
+
+### Linux
+
+From the repository root, build the release packages in an x86-64 Debian 12 container and run the installed apps against a local HTTPS webhook fixture:
+
+```sh
+mkdir -p dist
+docker build --platform linux/amd64 -f linux/Dockerfile -t wow-ding-linux-build .
+docker run --rm --platform linux/amd64 --network none -v "$PWD:/src:ro" -v "$PWD/dist:/src/dist" wow-ding-linux-build ./linux/build.sh
+docker run --rm --platform linux/amd64 --network none --add-host discord.com:127.0.0.1 -v "$PWD:/src:ro" wow-ding-linux-build ./linux/test.sh
+```
 
 ### macOS
 

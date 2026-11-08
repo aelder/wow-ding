@@ -21,6 +21,24 @@ def webhook_path(url: str) -> str:
     return match[1] + "?wait=true"
 
 
+def verify_secret(secret, channel=None):
+    path = webhook_path(secret).split("?")[0]
+    conn = http.client.HTTPSConnection("discord.com", timeout=10)
+    try:
+        conn.request("GET", path, headers={"User-Agent": "WoW-Ding/1.1"})
+        response = conn.getresponse()
+        if response.status != 200:
+            raise ValueError(f"Discord returned HTTP {response.status}. Check the webhook and try again.")
+        metadata = json.loads(response.read(64_000))
+        if channel and metadata.get("channel_id") != channel:
+            raise ValueError("Please use the webhook for your existing WoW Ding channel.")
+        if not isinstance(metadata.get("channel_id"), str) or not metadata["channel_id"].isascii() or not metadata["channel_id"].isdigit():
+            raise ValueError("Choose a webhook for a Discord text channel.")
+        return metadata["channel_id"]
+    finally:
+        conn.close()
+
+
 def delay_seconds(value) -> float:
     try:
         delay = float(value)

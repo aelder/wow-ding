@@ -1,0 +1,7 @@
+[Desktop Entry]
+Type=Application
+Name=WoW Ding
+Comment=Send WoW Forever level-ups to Discord
+Exec=wow-ding
+Terminal=false
+Categories=Game;
