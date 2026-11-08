@@ -1,4 +1,5 @@
 """Run in a disposable Linux desktop session with an unlocked test keyring."""
+import argparse
 import contextlib
 import json
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
@@ -131,6 +132,9 @@ class DiscordFixture(BaseHTTPRequestHandler):
 
 
 if __name__ == "__main__":
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument("--installed-only", action="store_true", help="test the system package only")
+    args = parser.parse_args()
     if socket.gethostbyname("discord.com") != "127.0.0.1":
         sys.exit("Run inside the offline test container with discord.com mapped to loopback.")
     with tempfile.TemporaryDirectory() as temp:
@@ -146,10 +150,11 @@ if __name__ == "__main__":
             server.socket = tls.wrap_socket(server.socket, server_side=True)
             threading.Thread(target=server.serve_forever, daemon=True).start()
             try:
-                subprocess.run(["tar", "-xzf", ROOT / "dist/WoW-Ding-Linux-x86_64.tar.gz", "-C", directory], check=True)
-                portable = directory / 'Portable $ WoW'
-                shutil.move(directory / "wow-ding", portable)
-                for index, binary in enumerate(["/usr/bin/wow-ding", str(portable / "wow-ding")]):
-                    verify(binary, directory / str(index))
+                verify("/usr/bin/wow-ding", directory / "installed")
+                if not args.installed_only:
+                    subprocess.run(["tar", "-xzf", ROOT / "dist/WoW-Ding-Linux-x86_64.tar.gz", "-C", directory], check=True)
+                    portable = directory / 'Portable $ WoW'
+                    shutil.move(directory / "wow-ding", portable)
+                    verify(str(portable / "wow-ding"), directory / "portable-test")
             finally:
                 server.shutdown()
